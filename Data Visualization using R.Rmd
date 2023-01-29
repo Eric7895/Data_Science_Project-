@@ -1,0 +1,208 @@
+---
+title: "Data visualization using R"
+author: "Eric Wu"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+```
+
+```{r prepare_data}
+#| message = FALSE,
+#| warning = FALSE
+
+rm(list = ls()) # Clean environment
+# Load libraries
+library(rvest)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(esquisse)
+library(janitor)
+library(kableExtra)
+
+# Scraping data from FlixPatrol
+df <- read_html(
+  x = "https://flixpatrol.com/popular/movies/movie-db/2022-11-10/") %>%
+  html_elements(css = "table") %>%
+  html_table()
+
+flix_table <- bind_cols(df)
+
+```
+
+```{r data_cleaning}
+#| warning = FALSE
+
+movies <- flix_table %>%
+  separate( # Divide X2 into multiple individual columns
+    col = X2,
+    into = c("Movie_Name","Country","Date","Platform", "Genre", "Misc."),
+    sep = "\\| "  # Separate the string using a regular expression (Regex) for "|"
+  ) %>%
+  dplyr::filter( # Filter movies without no genre 
+    !is.na(Platform) 
+  ) %>%
+  select(-X1) %>% # Get rid of X1 column
+  separate( # Separate the string using double spaces
+    col = Movie_Name,
+    into = c("Movie_Name", "Type"),
+    sep = "  "
+  )
+
+# Removing extra spaces and characters
+movies$Platform <- gsub(
+    pattern = " ", 
+    replacement = '', 
+    x = movies$Platform) 
+
+movies$Genre <- gsub(
+    pattern = " ", 
+    replacement = '', 
+    x = movies$Genre) 
+
+movies$X3 <- gsub(
+    pattern = "[ p.]", 
+    replacement = '', 
+    x = movies$X3) %>%
+  as.numeric() # Turn X3 into numerical data
+
+# Create a vector of genre
+genre <- movies$Genre
+genre <- append(genre, c('Action', 'Horror', 'Romance','Superhero')) # append other genre to the list manually
+
+# Try to move "Platform" value to "Genre" column 
+for (i in 1:84)
+  if (movies$Platform[i] %in% genre){ # Check if the "Platform" column contains "Genre" value
+    value = movies$Platform[i]
+    movies$Genre[i] <- value
+    movies$Platform[i] <- NA
+  }
+
+# Change the name of x3 column
+movies <- movies %>%
+  rename(
+    Vote = X3
+  ) %>%
+  select(-Type) # Remove "type" column
+
+```
+
+# *Background*
+
+> The website "FlixPatrol" provides a variety of recommendations based on social media platforms and has a large movie data set that offers a regularly updated billboard for the most popular titles.
+
+![Figure 1 (Cited from FlixPatrol)](https://flixpatrol.com/static/img/facebook-opt.png)
+
+## *Skill Set Objectives*
+
+-   Data scraping and wangling
+
+-   Data visualizations and chart design
+
+## *Data Set*
+
+The primary data set is scraped from the November FlixPatrol billboard with the name of the movie (Movie_Name), where the movie is from (Country), date of insertion (Date), which platform is it from (Platform), votes (Vote), and other miscellaneous remarks (Misc.).
+
+## *Data Visualization*
+
+```{r data_visual_bar}
+#esquisse::esquisser(movies)
+
+movies %>%
+ filter(!(Platform %in% "Action") | is.na(Platform)) %>% # Filter extra information
+ filter(!is.na(Genre)) %>%
+ ggplot() +
+  aes(x = reorder(Genre, +Vote, sum), y = Vote, fill = Platform) + # Sort bar chart in ascending order
+  geom_col() +
+  scale_fill_hue(direction = 1) +
+  labs(
+    x = "Genre",
+    y = "Count of people voted",
+    title = "Figure 2: Movie Trends Base on Genre (2022)",
+    caption = "Data from FlixPatrol"
+  ) +
+  coord_flip() + 
+  theme_minimal()
+
+```
+
+Figure 2 presents an organized bar graph with the rank of genres using the featured billboard from FlixPatrol. Based on the bar graph, "Horror" is the most favored genre of the month, followed by "Drama" and "Fantasy". In addition, most movies are not released on only one platform, which is why most of the bar graph are filled with gray color. Furthermore, it seems like other than N/A, the Netflix platform released the most number of movies. the actual number will be examined using a frequency table.
+
+```{r top_three_horror}
+movies %>%
+  select(-Date) %>%
+  filter(Genre == "Horror") %>%
+  arrange(desc(Vote)) %>%
+  head(3) %>%
+  kable(
+    caption = "<center>Table 1: Top Three Horror Movie</center>",
+    align = c(rep('c', 7))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 14
+  )
+
+```
+
+Table 1 presents the top three horror movies with the highest vote.
+
+```{r frequence_table}
+movie_freq <- movies %>%
+  tabyl(Platform, Genre) %>%
+  adorn_totals(where = c('row', 'col')) %>%  # add the total 
+  adorn_percentages(denominator = 'all') %>%  # add the relative percentage
+  adorn_pct_formatting(digits = 2) %>%  # adjust the decimal point
+  adorn_title(                        
+    placement = 'combined',
+    row_name = 'Platform',
+    col_name = 'Genre'
+  )
+
+formatAF <- attr(movie_freq, 'core') %>%
+  adorn_totals(where = c('row', 'col')) %>%
+  mutate(
+    across(where(is.numeric), format, big.mark = ',')
+  )
+
+movie_freq_fin <- movie_freq %>%
+  adorn_ns(position = 'front', ns = formatAF)
+
+# Polish (Return a image)
+movie_freq_fin %>%
+  kable(
+    caption = '<center>Table 2: Frequency between Platform and Genre</center>',
+    booktabs = TRUE,
+    align = c('l', rep('c', 17))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 14
+  )
+
+```
+
+Table 2 provided a deeper understanding of the relationship between platform and genre. From the table, it's proven to be true that Netflix released the most amount of movies that are on this billboard, aside from NA.
+
+## *Discussion and Limitation*
+
+This rmd file discussed and analyzed a billboard scraped from a movie recommendation website, and presented several data visualization using the ggplot2, janitor, and kableExtra libraries. Some limitation of this report included a limited amount of attribute that does not support many other kinds of analysis and visualization, and the inability on using other analysis tools like clustering, etc. However, the cleaned data set will also be included as the output of this exercise. 
+
+```{r output_csv}
+write.csv(movies,"C:\\Users\\wue77\\Documents\\R file\\Movies.csv", row.names = FALSE)
+
+```
+
+## *Code Appendix*
+
+```{r code_appendix}
+#| ref.label = knitr::all_labels(),
+#| echo = TRUE,
+#| eval = FALSE
+
+```
