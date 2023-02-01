@@ -164,7 +164,7 @@ movie_freq <- movies %>%
     col_name = 'Genre'
   )
 
-formatAF <- attr(movie_freq, 'core') %>%
+formatAF <- attr(movie_freq, 'core') %>% # Reproduce the absolute frequency table
   adorn_totals(where = c('row', 'col')) %>%
   mutate(
     across(where(is.numeric), format, big.mark = ',')
