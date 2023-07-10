@@ -1,14 +1,33 @@
 ---
-title: "Data visualization using R"
+title: "Exploratory Data Analysis using R"
 author: "Eric Wu"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  html_document: default
+  pdf_document:
+    fig_caption: yes        
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 
 ```
+
+# Background
+
+The website "FlixPatrol" provides a variety of recommendations based on social media platforms and has a large movie data set that offers a regularly updated billboard for the most popular titles.
+
+![(Cited from FlixPatrol)](Picture.png)
+
+## Skill Set Objectives
+
+-   Data scraping and wangling
+
+-   Data visualizations and chart design
+
+## Dataset
+
+The primary data set is scraped from the November FlixPatrol billboard with the name of the movie (Movie_Name), where the movie is from (Country), date of insertion (Date), which platform is it from (Platform), votes (Vote), and other miscellaneous remarks (Misc.).
 
 ```{r prepare_data}
 #| message = FALSE,
@@ -24,6 +43,7 @@ library(tidyr)
 library(esquisse)
 library(janitor)
 library(kableExtra)
+library(float)
 
 # Scraping data from FlixPatrol
 df <- read_html(
@@ -92,25 +112,20 @@ movies <- movies %>%
 
 ```
 
-# *Background*
+# Research Question
 
-> The website "FlixPatrol" provides a variety of recommendations based on social media platforms and has a large movie data set that offers a regularly updated billboard for the most popular titles.
+Here are some of the research questions to begin with:
 
-![Figure 1 (Cited from FlixPatrol)](https://flixpatrol.com/static/img/facebook-opt.png)
+1.  What is the most popular genre of the month?
 
-## *Skill Set Objectives*
+2.  What are the three most popular movies within the genre?
 
--   Data scraping and wangling
+# Exploratory Data Analysis
 
--   Data visualizations and chart design
-
-## *Data Set*
-
-The primary data set is scraped from the November FlixPatrol billboard with the name of the movie (Movie_Name), where the movie is from (Country), date of insertion (Date), which platform is it from (Platform), votes (Vote), and other miscellaneous remarks (Misc.).
-
-## *Data Visualization*
+## Data Visualization
 
 ```{r data_visual_bar}
+#| warning = FALSE
 #esquisse::esquisser(movies)
 
 movies %>%
@@ -131,7 +146,7 @@ movies %>%
 
 ```
 
-Figure 2 presents an organized bar graph with the rank of genres using the featured billboard from FlixPatrol. Based on the bar graph, "Horror" is the most favored genre of the month, followed by "Drama" and "Fantasy". In addition, most movies are not released on only one platform, which is why most of the bar graph are filled with gray color. Furthermore, it seems like other than N/A, the Netflix platform released the most number of movies. the actual number will be examined using a frequency table.
+Figure 2 presents an organized bar graph with the rank of genres using the featured billboard from FlixPatrol. Based on the bar graph, "Horror" is the most favored genre of the month, followed by "Drama" and "Fantasy". In addition, most movies are not released on only one platform, which is why most of the bar graphs are filled with gray color. Furthermore, it seems like other than N/A, the Netflix platform released the most number of movies. the actual number will be examined using a frequency table.
 
 ```{r top_three_horror}
 movies %>%
@@ -140,12 +155,13 @@ movies %>%
   arrange(desc(Vote)) %>%
   head(3) %>%
   kable(
-    caption = "<center>Table 1: Top Three Horror Movie</center>",
+    caption = "Top Three Horror Movie",
     align = c(rep('c', 7))
   ) %>%
   kableExtra::kable_styling(
     bootstrap_options = c('striped', 'condensed'),
-    font_size = 14
+    font_size = 14,
+    latex_options = "HOLD_position"
   )
 
 ```
@@ -153,9 +169,35 @@ movies %>%
 Table 1 presents the top three horror movies with the highest vote.
 
 ```{r frequence_table}
-movie_freq <- movies %>%
-  tabyl(Platform, Genre) %>%
-  adorn_totals(where = c('row', 'col')) %>%  # add the total 
+#| warning = FALSE
+
+freq_table <- tabyl(movies, Platform, Genre) %>%
+  mutate(
+    Other = 0
+  )
+
+name_temp <- c() # Store column that needs to be drop
+for (i in 2:27){
+  if (sum(freq_table[[i]]) < 5){
+    freq_table[28] <- paste(freq_table[[i]], freq_table$Other, sep = "-") # Store all values to the "Other“ Column
+    name_temp <- append(name_temp, i)
+  }
+}
+
+freq_table <- freq_table[-name_temp]
+
+for (i in 1:nrow(freq_table)){ # Convert "other" column to actual integer values
+  temp <- c(freq_table$Other[i])
+  temp <- strsplit(temp, "-")
+  temp <- as.numeric(unlist(temp))
+  freq_table$Other[i] = sum(temp)
+}
+
+freq_table$Other <- as.numeric(freq_table$Other)
+
+movie_freq <- freq_table %>%
+  untabyl() %>%
+  adorn_totals(c('row', 'col')) %>%  # add the total 
   adorn_percentages(denominator = 'all') %>%  # add the relative percentage
   adorn_pct_formatting(digits = 2) %>%  # adjust the decimal point
   adorn_title(                        
@@ -176,29 +218,30 @@ movie_freq_fin <- movie_freq %>%
 # Polish (Return a image)
 movie_freq_fin %>%
   kable(
-    caption = '<center>Table 2: Frequency between Platform and Genre</center>',
+    caption = 'Frequency between Platform and Genre',
     booktabs = TRUE,
     align = c('l', rep('c', 17))
   ) %>%
   kableExtra::kable_styling(
     bootstrap_options = c('striped', 'condensed'),
-    font_size = 14
+    font_size = 4,
+    latex_options = "HOLD_position"
   )
 
 ```
 
-Table 2 provided a deeper understanding of the relationship between platform and genre. From the table, it's proven to be true that Netflix released the most amount of movies that are on this billboard, aside from NA.
+Table 2 provided a deeper understanding of the relationship between platform and genre. In addition, the table drops any genres that has less than 5.3% of data values and combine them into one single "other" column to prevent the final frequency table from being over-sized. From the table, it's proven to be true that Netflix released the most amount of movies that are on this billboard, aside from NA.
 
-## *Discussion and Limitation*
+# Conclusion
 
-This rmd file discussed and analyzed a billboard scraped from a movie recommendation website, and presented several data visualization using the ggplot2, janitor, and kableExtra libraries. Some limitation of this report included a limited amount of attribute that does not support many other kinds of analysis and visualization, and the inability on using other analysis tools like clustering, etc. However, the cleaned data set will also be included as the output of this exercise. 
+This rmd file discussed and analyzed a billboard scraped from a movie recommendation website, and presented several data visualization using the ggplot2, janitor, and kableExtra libraries. Some limitation of this report included a limited amount of attribute that does not support many other kinds of analysis and visualization, and the inability on using other analysis tools like clustering, etc. However, the cleaned data set will also be included as the output of this exercise.
 
 ```{r output_csv}
 write.csv(movies,"C:\\Users\\wue77\\Documents\\R file\\Movies.csv", row.names = FALSE)
 
 ```
 
-## *Code Appendix*
+# Code Appendix
 
 ```{r code_appendix}
 #| ref.label = knitr::all_labels(),

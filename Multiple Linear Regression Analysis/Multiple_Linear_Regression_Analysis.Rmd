@@ -1,0 +1,224 @@
+---
+title: "Multiple Linear Regression Analysis"
+author: "Eric Wu"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  fig.pos = 'H')
+
+```
+
+```{r prepare_data}
+#| message = FALSE,
+#| warning = FALSE
+
+rm(list = ls()) # Clean environment
+# Load libraries
+library(psych)
+library(tidyverse)
+library(kableExtra)
+library(modelr)
+library(stats)
+library(esquisse)
+library(float)
+library(caret)
+
+housing <- read.csv("housing.csv")
+
+```
+
+# Background
+
+The data set "housing" is from Kaggle.com, an online community with enriched data sets from various contributors for data analysis and machine learning projects. The primary owner of the "housing" data set is Ashish.
+
+![(Cited from <https://opendatascience.com/10-tips-to-get-started-with-kaggle/>)](kaggle.png)
+
+## Skill Set Objectives
+
+-   Multiple Regression Analysis
+
+-   Backward Elimination
+
+-   Perform Cross Validations on the model (Leave One Out Cross Validation will be used)
+
+## Dataset
+
+The data set contains the data of 545 houses with 13 variables including the price, area(square feet), number of bedrooms/bathrooms, stories(floors without basement), whether it's close to the main road/preferred neighborhood, has a guest room/basement/hot water heating/air conditioning, number of parking spaces, and furnish status. The data set also has `r sum(is.na(housing))` null values.
+
+```{r descriptive statistcs}
+quanti_vars <- c("price", "area", "bedrooms", "bathrooms", "stories", "parking")
+summary_stat <- psych::describe(housing[quanti_vars], skew = FALSE) %>%
+  round(2)
+
+summary_stat %>%
+  kable(
+    caption = 'Basic statistics of quantitative variables',
+    booktabs = TRUE,
+    align = c('l', rep('c', 8))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 10,
+    latex_options = "hold_position"
+  ) 
+
+```
+
+Table 1 demonstrated some simple statistics of the quantitative variables within the data set. Based on the table, there's a huge difference in scale between the price and other variables. Which showed a need for scaling the data.
+
+# Research Question
+
+Here are some research questions to begin with:
+
+1. Which model is selected to be the "best" model using backward-elimination?
+
+2. Which predictor is the most influential?
+
+3. What's the estimated price for a house with 7000 square feet, 3 bedrooms, 3 bathrooms, 1 stories, next to main road, doesn't have a guestroom, have a basement, hot water heating, air conditioning, 1 parking space, at a preferred neighborhood, and is furnished? 
+
+# Implementing Multiple Linear Regression
+
+Before implementing the multiple linear regression, it's important to know that the categorical variable can also an effect on the prediction of the pricing of the rent. Therefore, it's crucial to create indicator variables to evaluate the effect of all the categorical variables in the dataset.
+
+```{r}
+# Scale the data
+testing <- housing %>%
+  mutate(
+    price = log(price),
+    area = log(area)
+  )
+
+summary_stat2 <- psych::describe(testing[quanti_vars], skew = FALSE) %>%
+  round(2)
+
+summary_stat2 %>%
+  kable(
+    caption = 'Scaled statistics of quantitative variables',
+    booktabs = TRUE,
+    align = c('l', rep('c', 8))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 10,
+    latex_options = "HOLD_position"
+  ) 
+
+```
+
+Table 2 demonstrated the statistics of scaled data, primarily on the price and area variable to prevent the difference in scaling.
+
+```{r multiple_linear_regression}
+# Convert categorical to indicator variables
+testing <- testing %>%
+  mutate(
+    mainroad_var = ifelse(mainroad == "yes", 1, 0),
+    guestroom_var = ifelse(guestroom == "yes", 1, 0),
+    basement_var = ifelse(basement == "yes", 1, 0),
+    hotwaterheating_var = ifelse(hotwaterheating == "yes", 1, 0),
+    airconditioning_var = ifelse(airconditioning == "yes", 1, 0),
+    prefarea_var = ifelse(prefarea == "yes", 1, 0),
+    furnishingstatus_var = ifelse(furnishingstatus == "furnished", 1, 0) # Set other level of furnished as base group
+  )
+
+# Create a data set to store all variables except categorical variable
+housing_prep <- testing %>%
+  select(-mainroad, -basement, -guestroom, -hotwaterheating, -airconditioning, -prefarea, -furnishingstatus)
+
+# 10-fold Cross Validation
+train_control <- trainControl(method = "cv",
+                              number = 10)
+
+cv_full <- train(price ~ .-price, data = housing_prep, 
+               method = "lm",
+               trControl = train_control)
+
+full_model <- lm(price ~ .-price, data = housing_prep) # Create a full model
+```
+
+The full model is a great model to start with since the effect of each variables is not pre-known, and the coefficient of the model are listed in the following
+
+```{r full_model_coefficient}
+round(full_model$coefficients, 3)
+
+```
+
+The "var" variables are the indicator of the original categorical variables, and the data is scaled to ensure the possibility in comparing different predictor variables. In addition to the coefficients, the R\^2 value of the full model are `r round(summary(full_model)$r.squared, 2) * 100`%. The R\^2 value of `r round(summary(full_model)$r.squared, 2) * 100`% indicates that the model explains `r round(summary(full_model)$r.squared, 2) * 100`% of the total variation in the price variable.
+
+```{r cv_result}
+print(cv_full)
+```
+Here are the results of the 10-fold cross validation, with a RMSE of `r cv_full$results[[2]]`.
+
+# Testing Linear Assumptions
+
+Before performing model selection, it's important to check for the linear assumptions
+
+```{r residual normality}
+shapiro.test(full_model$residuals)
+
+```
+
+First we can check the normality of the residuals. Based on the result from the Shapiro-wilk normality test, we reject the null hypothesis and concluded that the residual does not come from a normal distribution.
+
+```{r QQ Plot}
+#| out.width = 350
+qqnorm(full_model$residuals)
+qqline(full_model$residuals)
+
+```
+
+The above QQ Plot suggested a similar conclusion and it demonstrates that there's extremes or outliers in the data set. 
+
+```{r Constant Variance}
+#| out.width = 350
+plot(full_model, 3)
+
+```
+
+Next to check is the constant variance of residuals. Based on the graph, the variance of the residuals are not constant either. 
+
+# Backward-Elimination
+
+Next step is to perform backward-elimination using the step function from the stats library to determine the best model by the Alkaika Information Criterion (AIC) that penalized the likelihood by the number of terms in the model.
+
+```{r Backward Elimination}
+int_only_model <- lm(price ~ 1, data = housing_prep)
+stats::step(object = full_model, 
+            scope = list(lower = int_only_model, upper = full_model),
+            data = housing_prep,
+            direction = "backward")
+
+```
+
+```{r make prediction}
+# Created a scaled data frame
+housing_prep[546, ] <- list(0, log(7000), 3, 3, 1, 1, 1, 0, 1, 1, 1, 1, 1)
+prediction <- housing_prep[546, ]
+
+# Calculated the prediction
+price <- predict(full_model, newdata = prediction)
+
+```
+
+Surprisingly, the best model selected by the backward-elimination is the full model, which suggested that it's the most accurate model that uses minimum possible number of predictors in AIC standard. Based on the result, the most influential predictor suggested by the model is the "area" variable because it has the largest coefficient and the data set is scaled to make sure the comparison are valid. Moreover, the predicted price of the third research question according to the model are $`r exp(price[[1]])` dollars.
+
+# Conclusion
+
+This rmd file discussed and analyzed the possible usage of a multiple linear regression model on a housing price prediction data, including model selections using backward-elimination method as will as tested some of the assumptions of multiple linear regression. It's after testes that the data set doesn't fit many of the linear model assumptions, but given that the full model has a residual of `r round(summary(full_model)$r.squared, 2) * 100`%, and that means we can still use the multiple regression model for the estimation of housing prices and the average rmse of the full model are `r cv_full$results[[2]]` which suggest an average difference of `r cv_full$results[[2]] * 100`%.
+
+# Code Appendix
+
+```{r code_appendix}
+#| ref.label = knitr::all_labels(),
+#| echo = TRUE,
+#| eval = FALSE
+
+```
