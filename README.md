@@ -2,7 +2,7 @@
 Example projects for practice purposes
 
 ## Exploratory Data Analysis using R 
-Objective - Manage to create various types of data visualizations that include charts and graphs to answer questions regarding a random dataset.
+Objective - Manage to create various types of data visualizations that include charts and graphs to answer questions regarding a selected dataset.
 
 Example questions include but are not limited to:
 
@@ -12,7 +12,7 @@ Example questions include but are not limited to:
 4) etc..
 
 ## Multiple Linear Regression Model using R
-Objective - Create and test the performance of multiple linear regression to answer questions regarding a random dataset. 
+Objective - Create and test the performance of multiple linear regression to answer questions regarding a selected dataset. 
 
 Example questions include but are not limited to:
 
