@@ -1,0 +1,299 @@
+---
+title: "Compare the effects of Randome forest and KNN Classification on Sleep Data Set"
+author: "Eric Wu"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r Prepare Data}
+#| message = FALSE,
+#| warning = FALSE
+
+rm(list = ls()) # Clean environment
+# Load libraries
+library(psych)
+library(tidyverse)
+library(kableExtra)
+library(modelr)
+library(stats)
+library(esquisse)
+library(float)
+library(caret)
+library(FNN)
+library(randomForest)
+
+sleep <- read.csv("sleep.csv")
+
+```
+
+# Background
+
+The dataset "Sleep health and lifestyle" is from Kaggle.com, an online community with enriched datasets from various contributors for data analysis and machine learning projects. The primary owner of the "housing" data set is Laksika Tharmalingam.
+
+![(Cited from <https://opendatascience.com/10-tips-to-get-started-with-kaggle/>)](kaggle.png)
+
+## Skill Set Objectives
+
+-   KNN Classification on multi-class variable
+
+-   Cross Validation
+
+-   Data Visualization
+
+## Dataset
+
+The "Sleep health and lifestyle" dataset consists of data from 374 individuals with 13 variables. The goal of the dataset is to predict the type of sleep disorders based on all other factors, with an emphasis on sleep and exercise routines. Some of the variables included are sleep duration, quality of sleep, physical activity level, stress level, BMI categories, blood pressure, heart rate, etc. In addition, the dataset also has `r sum(is.na(sleep))` null values.
+
+```{r Descriptive Statistics}
+sleep <- sleep %>%
+  separate(Blood.Pressure, c("place1", "place2")) %>% # Separate blood pressure into systolic and diastolic measures
+  mutate(
+    Systolic = as.integer(place1),
+    Diastolic = as.integer(place2)
+  ) %>%
+  select(-place1, -place2)
+
+quant_list <- c("Age", "Sleep.Duration", "Quality.of.Sleep", "Physical.Activity.Level", "Stress.Level", "Heart.Rate", "Daily.Steps", "Systolic", "Diastolic")
+
+summary_stat <- psych::describe(sleep[quant_list], skew = FALSE) %>%
+  round(2)
+
+summary_stat %>%
+  kable(
+    caption = 'Basic statistics of quantitative variables',
+    booktabs = TRUE,
+    align = c('l', rep('c', 8))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 10,
+    latex_options = "HOLD_position"
+  ) 
+
+```
+
+Table 1 demonstrates some sample statistics for the "sleep, health, and lifestyle" dataset, and some of the findings are very interesting. For example, the average value of the quality of sleep is 7.31 (out of 10), which means a majority of people believe they are having quality sleep although only `r round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% don't have a sleep disorder, this means that `r 100 - round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% of people who have a sleep disorder doesn't seem to be bothered by the sleep disorder. which suggest the importance of another measurement regarding the severeness of the sleep disorder, although it can be estimated with other variables, or suggest that people filling out the survey are being biased about their quality of sleep. 
+
+## Exploratory Data Analysis
+
+The Exploratory Data Analysis section will focus on finding the relationships between Sleep Disorder and other important factors.
+
+```{r How Sleep Disorder Affect Stress Level}
+#| fig.height = 3.75
+
+ggplot(sleep) +
+  aes(x = Stress.Level, fill = Sleep.Disorder) +
+  geom_bar() +
+  scale_fill_manual(
+    values = c(Insomnia = "#F8766D",
+    None = "#00C19F",
+    `Sleep Apnea` = "#FF61C3")
+  ) +
+  labs(
+    x = "Stress Level",
+    y = "Count",
+    title = "Figure 2:How Sleep Disorder Affect Stress Level",
+    fill = "Sleep Disorder"
+  ) +
+  theme_classic() +
+  theme(plot.title = element_text(size= 9)) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+stress_population <- sleep %>%
+  filter(
+    Stress.Level >= 7
+  )
+
+```
+
+To begin with, the first graph demonstrates how sleep disorders affect people's stress levels. For example, people who are extremely stressed tend to have Sleep Apnea than Insomnia. However, although the total count also decreased, for just one level decrease in stress, people with Insomnia outnumbered those with Sleep Apnea. On the other hand, we can generalize and conclude that both seven and eight are considered extremely stressed, and the reason that people are not selecting stress levels nine and ten is response bias.
+
+Another intriguing finding is that people who have sleep Apnea tend to be in two extremes and people with Insomnia are more evenly spread. This can be because people with Insomnia are growing stressed from time to time, and Sleep Apnea either significantly increases stress or does not affect the stress level at all. One thing to not forget is that only 30% of the extremely stressed population does not have sleep disorders, which is evidence proving that stress levels can lead to sleep disorders.
+
+```{r Sleep Duration Among Group With Different BMI Category and Sleep Disorder}
+#| fig.height = 3.75,
+#| fig,width = 3.75
+
+ggplot(sleep) +
+  aes(x = Sleep.Duration, y = Sleep.Disorder) +
+  geom_boxplot(fill = "#6D97E2") +
+  labs(
+    title = "Figure 3: Sleep Duration Among Group With Different BMI Category and Sleep Disorder",
+    x = "Sleep Duration",
+    y = "Sleep Disorder"
+  ) +
+  theme_classic() +
+  facet_wrap(vars(BMI.Category)) + 
+  theme(plot.title = element_text(size= 9)) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+The second graph presented a direct comparison of sleep duration between different groups based on sleep disorders and BMI category. From the graph, it's very easy to tell that the BMI category has four different classes with the "Normal" class being the largest (195), "Overweight" second (148), "Normal Weight" third (21), and "Obese" the fewest (10). Oddly, the author addresses the BMI category in four classes, but every piece of data is important in this analysis. On the other hand, It's clear that people who classify as obese either have sleep apnea or insomnia, which suggests that there can be a positive correlation between weight and sleep disorder; however, the reason can be because of the limited data.
+
+In addition, normal people with insomnia had a higher median sleep duration than any other group, this suggests that people classified as normal weight can be less affected by insomnia. However, because the distribution of the data is not normal, and that means median is no longer a great indicator of the average. Moreover, people who classified as overweight and insomnia seem to have a relatively lower average of sleep duration compare to other people who also classified as insomnia.
+
+```{r Histogram of Daily Steps in Relation to Sleep Disorder}
+ggplot(sleep) +
+  aes(x = Daily.Steps, fill = Sleep.Disorder) +
+  geom_histogram(bins = 30L) +
+  scale_fill_brewer(palette = "Spectral", direction = 1) +
+  labs(
+    x = "Daily Steps",
+    y = "Count",
+    title = "Figure 4: Histogram of Daily Steps in Relation to Sleep Disorder",
+    fill = "Sleep Disorder"
+  ) +
+  theme_classic() +
+  theme(legend.position = "bottom") + 
+  theme(plot.title = element_text(size= 9)) + 
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The third graph is a histogram of daily steps with sleep disorders as fills. One interesting finding about this graph everyone who walks less than 4,000 steps per day has some sort of sleep disorder, and people who walk the most seem to be dominated by sleep apnea with a small proportion of insomnia. This suggests that either lack of exercise has some kind of association and people with sleep apnea are not that severe that prevent daily activities.
+
+## KNN Classification
+
+```{r Implementing KNN Classification}
+# Scaled the data
+xvars <- names(sleep)
+xvars <- xvars[-c(1, 12)]
+
+# Setting up dummy variables (KNN Only works with quantitative variables)
+sleep_scaled <- sleep %>%
+  mutate(
+    Gender = ifelse(Gender == "Male", 1, 0),
+    
+    Occupation = case_when(
+      Occupation == "Software Engineer" ~ 0,
+      Occupation == "Doctor" ~ 1,
+      Occupation == "Sales Representative" ~ 2,
+      Occupation == "Teacher" ~ 3,
+      Occupation == "Nurse" ~ 4,
+      Occupation == "Engineer" ~ 5,
+      Occupation == "Accountant" ~ 6,
+      Occupation == "Scientist" ~ 7,
+      Occupation == "Lawyer" ~ 8,
+      Occupation == "Salesperson" ~ 9,
+      Occupation == "Manager" ~ 10),
+    
+    BMI.Category = case_when(
+      BMI.Category == "Overweight" ~ 0,
+      BMI.Category == "Normal" ~ 1,
+      BMI.Category == "Obese" ~ 2,
+      BMI.Category == "Normal Weight" ~ 3,
+    )
+  )
+
+sleep_scaled[ , xvars] <- scale(sleep_scaled[ , xvars],
+                            center = TRUE,
+                            scale = TRUE)
+
+# Assign fold value and rearrange fold
+num_folds <- 10
+folds <- cut(x = 1:nrow(sleep_scaled), breaks = num_folds, labels = FALSE)
+
+set.seed(123)
+folds <- sample(folds)
+set.seed(NULL)
+
+# Create a matrix to store validation output
+maxK <- 37 # Only 37 patterns
+accuracy_mat <- matrix(NA, nrow = num_folds, ncol = maxK)
+
+# Perform validation
+for(i in 1:num_folds){
+  train_ind <- which(folds == i)
+  train <- sleep_scaled[train_ind, ]
+  test <- sleep_scaled[-train_ind, ]
+  
+  for(j in 2:maxK){
+    knn_model <- knn(train = train[ , xvars, drop = FALSE],
+               test = test[ , xvars, drop = FALSE],
+               cl = train$Sleep.Disorder,
+               k = j)
+    
+    test <- test %>%
+          mutate(pred_sleep_disorder = knn_model)
+    
+    confusion.mat = table(test$pred_sleep_disorder, test$Sleep.Disorder)
+    
+    accuracy <- sum(diag(confusion.mat))/sum(confusion.mat)
+    
+    accuracy_mat[i, j] <- accuracy
+  }
+}
+
+accuracy_vec <- colMeans(accuracy_mat) # Convert matrix to vector by finding the average of each fold
+
+temp_df <- data.frame(NN = 1:37, accuracy = accuracy_vec)
+
+```
+
+Next is to implement the actual KNN classification algorithm, the key to KNN classification is that it only support qualitative variables and require scaling to make sure every variable is compared on the same scale. This report will also run a 10-fold cross validation loop to examine the best k (Greatest accuracy). 
+
+```{r Graph of Different K}
+#| warning = FALSE,
+
+
+ggplot(data = temp_df, mapping = aes(x = NN, y = accuracy)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Figure 5: Graph of the effect of the choice of k",
+       x = "Number of Nearest Neighbors",
+       y = "Accuracy") +
+  theme_classic() +
+  theme(plot.title = element_text(size= 9)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  geom_point(data = temp_df %>% filter(accuracy == max(accuracy[2:37])),
+      pch = 21, colour = "red", fill = "red") +
+  annotate("text", x = 3, y = 0.85, label = "k = 3")
+
+```
+Base on figure 5, the accuracy of the model decreases as k increases and the model performs best when k = 3.
+
+```{r final knn model}
+set.seed(123)
+train_ind <- sample(1:nrow(sleep_scaled), floor(0.8*nrow(sleep_scaled)))
+set.seed(NULL)
+
+train <- sleep_scaled[train_ind, ]
+test <- sleep_scaled[-train_ind, ]
+
+final_knn <- knn_model <- knn(train = train[ , xvars, drop = FALSE],
+               test = test[ , xvars, drop = FALSE],
+               cl = train$Sleep.Disorder,
+               k = 3)
+
+test <- test %>%
+          mutate(pred_sleep_disorder = knn_model)
+
+knn_confusion.mat = table(test$pred_sleep_disorder, test$Sleep.Disorder)
+knn_confusion.mat
+```
+
+Above is a confusion matrix of the prediction using the final knn model using a random seed of 123 and a 8/2 test/train split. Based on the confusion matrix of the model, the accuracy is `r sum(diag(knn_confusion.mat))/sum(knn_confusion.mat)`
+
+## Random Forest
+
+```{r Implementing Randome Forest}
+# New testing and training set
+train_tree <- sleep[train_ind, ]
+test_tree <- sleep[-train_ind, ]
+
+# Build a random forest to predict sleep disorder, default of ntree = 500 and mtry = round up sqrt(# of variables) for classification
+rf <- randomForest(as.factor(Sleep.Disorder) ~ ., data = train_tree, ntree = 500, mtry = 4)
+
+# Create a vector of prediction probability 
+pred_rf <- predict(rf, newdata = test_tree, type = "prob")
+
+# Create a confusion matrix
+pred_vec <- predict(rf, newdata = test_tree, type = "response")
+rf_confusion.mat = table(pred_vec, test$Sleep.Disorder)
+rf_confusion.mat
+```
+

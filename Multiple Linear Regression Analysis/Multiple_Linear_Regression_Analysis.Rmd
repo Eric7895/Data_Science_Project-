@@ -47,7 +47,7 @@ The data set "housing" is from Kaggle.com, an online community with enriched dat
 
 -   Backward Elimination
 
--   Perform Cross Validations on the model (Leave One Out Cross Validation will be used)
+-   Perform Cross Validations on the model 
 
 ## Dataset
 
