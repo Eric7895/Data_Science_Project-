@@ -21,3 +21,10 @@ Example questions include but are not limited to:
 3) Actual prediction using make-up data.
 4) etc..
 
+## Compare the effects of Randome forest and KNN Classification on Sleep Data Set
+Objective - Build and compare the performance (based on accuracy) of a KNN classification model and a random forest based on "Sleep health and lifestyle" data set.
+
+Example questions:
+1) Which model performs better, KNN or random forest?
+2) What are the possible advantages of using KNN classification, or random forest?
+3) etc..
