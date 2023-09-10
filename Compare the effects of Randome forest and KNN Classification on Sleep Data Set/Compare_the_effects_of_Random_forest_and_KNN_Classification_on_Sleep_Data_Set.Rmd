@@ -1,15 +1,17 @@
 ---
-title: "Compare the effects of Randome forest and KNN Classification on Sleep Data Set"
+title: "Compare the effects of Random forest and KNN Classification on Sleep Data Set"
 author: "Eric Wu"
 date: "`r Sys.Date()`"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-```{r Prepare Data}
+```{r}
 #| message = FALSE,
 #| warning = FALSE
 
@@ -25,6 +27,7 @@ library(float)
 library(caret)
 library(FNN)
 library(randomForest)
+library(reprtree)
 
 sleep <- read.csv("sleep.csv")
 
@@ -44,11 +47,15 @@ The dataset "Sleep health and lifestyle" is from Kaggle.com, an online community
 
 -   Data Visualization
 
+-   Random Forest on multi-class variable
+
+-   Out Of Bag (OOB) Error
+
 ## Dataset
 
 The "Sleep health and lifestyle" dataset consists of data from 374 individuals with 13 variables. The goal of the dataset is to predict the type of sleep disorders based on all other factors, with an emphasis on sleep and exercise routines. Some of the variables included are sleep duration, quality of sleep, physical activity level, stress level, BMI categories, blood pressure, heart rate, etc. In addition, the dataset also has `r sum(is.na(sleep))` null values.
 
-```{r Descriptive Statistics}
+```{r}
 sleep <- sleep %>%
   separate(Blood.Pressure, c("place1", "place2")) %>% # Separate blood pressure into systolic and diastolic measures
   mutate(
@@ -76,13 +83,13 @@ summary_stat %>%
 
 ```
 
-Table 1 demonstrates some sample statistics for the "sleep, health, and lifestyle" dataset, and some of the findings are very interesting. For example, the average value of the quality of sleep is 7.31 (out of 10), which means a majority of people believe they are having quality sleep although only `r round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% don't have a sleep disorder, this means that `r 100 - round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% of people who have a sleep disorder doesn't seem to be bothered by the sleep disorder. which suggest the importance of another measurement regarding the severeness of the sleep disorder, although it can be estimated with other variables, or suggest that people filling out the survey are being biased about their quality of sleep. 
+Table 1 demonstrates some sample statistics for the "sleep, health, and lifestyle" dataset, and some of the findings are very interesting. For example, the average value of the quality of sleep is 7.31 (out of 10), which means a majority of people believe they are having quality sleep although only `r round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% don't have a sleep disorder, this means that `r 100 - round(sum(sleep$Sleep.Disorder == "None")/374 * 100, 2)`% of people who have a sleep disorder doesn't seem to be bothered by the sleep disorder. which suggest the importance of another measurement regarding the severeness of the sleep disorder, although it can be estimated with other variables, or suggest that people filling out the survey are being biased about their quality of sleep.
 
-## Exploratory Data Analysis
+## Exploratory Data Analysis (EDA)
 
 The Exploratory Data Analysis section will focus on finding the relationships between Sleep Disorder and other important factors.
 
-```{r How Sleep Disorder Affect Stress Level}
+```{r}
 #| fig.height = 3.75
 
 ggplot(sleep) +
@@ -114,7 +121,7 @@ To begin with, the first graph demonstrates how sleep disorders affect people's 
 
 Another intriguing finding is that people who have sleep Apnea tend to be in two extremes and people with Insomnia are more evenly spread. This can be because people with Insomnia are growing stressed from time to time, and Sleep Apnea either significantly increases stress or does not affect the stress level at all. One thing to not forget is that only 30% of the extremely stressed population does not have sleep disorders, which is evidence proving that stress levels can lead to sleep disorders.
 
-```{r Sleep Duration Among Group With Different BMI Category and Sleep Disorder}
+```{r}
 #| fig.height = 3.75,
 #| fig,width = 3.75
 
@@ -132,11 +139,12 @@ ggplot(sleep) +
   theme(plot.title = element_text(hjust = 0.5))
 
 ```
+
 The second graph presented a direct comparison of sleep duration between different groups based on sleep disorders and BMI category. From the graph, it's very easy to tell that the BMI category has four different classes with the "Normal" class being the largest (195), "Overweight" second (148), "Normal Weight" third (21), and "Obese" the fewest (10). Oddly, the author addresses the BMI category in four classes, but every piece of data is important in this analysis. On the other hand, It's clear that people who classify as obese either have sleep apnea or insomnia, which suggests that there can be a positive correlation between weight and sleep disorder; however, the reason can be because of the limited data.
 
 In addition, normal people with insomnia had a higher median sleep duration than any other group, this suggests that people classified as normal weight can be less affected by insomnia. However, because the distribution of the data is not normal, and that means median is no longer a great indicator of the average. Moreover, people who classified as overweight and insomnia seem to have a relatively lower average of sleep duration compare to other people who also classified as insomnia.
 
-```{r Histogram of Daily Steps in Relation to Sleep Disorder}
+```{r}
 ggplot(sleep) +
   aes(x = Daily.Steps, fill = Sleep.Disorder) +
   geom_histogram(bins = 30L) +
@@ -158,7 +166,7 @@ The third graph is a histogram of daily steps with sleep disorders as fills. One
 
 ## KNN Classification
 
-```{r Implementing KNN Classification}
+```{r}
 # Scaled the data
 xvars <- names(sleep)
 xvars <- xvars[-c(1, 12)]
@@ -234,11 +242,10 @@ temp_df <- data.frame(NN = 1:37, accuracy = accuracy_vec)
 
 ```
 
-Next is to implement the actual KNN classification algorithm, the key to KNN classification is that it only support qualitative variables and require scaling to make sure every variable is compared on the same scale. This report will also run a 10-fold cross validation loop to examine the best k (Greatest accuracy). 
+Next is to implement the actual KNN classification algorithm, the key to KNN classification is that it only support qualitative variables and require scaling to make sure every variable is compared on the same scale. This report will also run a 10-fold cross validation loop to examine the best k (Greatest accuracy).
 
-```{r Graph of Different K}
+```{r}
 #| warning = FALSE,
-
 
 ggplot(data = temp_df, mapping = aes(x = NN, y = accuracy)) +
   geom_point() +
@@ -254,9 +261,10 @@ ggplot(data = temp_df, mapping = aes(x = NN, y = accuracy)) +
   annotate("text", x = 3, y = 0.85, label = "k = 3")
 
 ```
+
 Base on figure 5, the accuracy of the model decreases as k increases and the model performs best when k = 3.
 
-```{r final knn model}
+```{r}
 set.seed(123)
 train_ind <- sample(1:nrow(sleep_scaled), floor(0.8*nrow(sleep_scaled)))
 set.seed(NULL)
@@ -272,15 +280,19 @@ final_knn <- knn_model <- knn(train = train[ , xvars, drop = FALSE],
 test <- test %>%
           mutate(pred_sleep_disorder = knn_model)
 
-knn_confusion.mat = table(test$pred_sleep_disorder, test$Sleep.Disorder)
+knn_confusion.mat = caret::confusionMatrix(data = test$pred_sleep_disorder,
+                                           reference = as.factor(test$Sleep.Disorder))
 knn_confusion.mat
+
 ```
 
-Above is a confusion matrix of the prediction using the final knn model using a random seed of 123 and a 8/2 test/train split. Based on the confusion matrix of the model, the accuracy is `r sum(diag(knn_confusion.mat))/sum(knn_confusion.mat)`
+Above is a confusion matrix of the prediction of the final knn model using a random seed of 123 and a 8/2 test/train split. Based on the confusion matrix of the model, the accuracy is `r (knn_confusion.mat$overall["Accuracy"]) * 100`% with a 95% confidence interval of 78.44% to 94.36%. The confusion matrix also presents relevant statistics like sensitivity, specificity of the different classes of sleep disorder. Based on the statistics, the model is performing better in predicting "None" class than the two sleep disorders. 
 
 ## Random Forest
 
-```{r Implementing Randome Forest}
+There's some advantages of using Random Forest when we are comparing against KNN classification. For example, random forest is an ensemble method that used out of bag (OOB) observations to calculate it's error rate, which means random forest models doesn't required cross-validation or train and test split because the error rate is automatically calculated through OOB observations. However, it's still important to create a train and test split using the same seed when we are comparing between different models. 
+
+```{r}
 # New testing and training set
 train_tree <- sleep[train_ind, ]
 test_tree <- sleep[-train_ind, ]
@@ -293,7 +305,62 @@ pred_rf <- predict(rf, newdata = test_tree, type = "prob")
 
 # Create a confusion matrix
 pred_vec <- predict(rf, newdata = test_tree, type = "response")
-rf_confusion.mat = table(pred_vec, test$Sleep.Disorder)
+rf_confusion.mat = caret::confusionMatrix(data = as.factor(pred_vec),
+                                           reference = as.factor(test$Sleep.Disorder))
 rf_confusion.mat
+
 ```
+Above are the confusion matrix of the random forest model, which demonstrated to have a higher accuracy rate compared to the knn model by `r (rf_confusion.mat$overall["Accuracy"] - knn_confusion.mat$overall["Accuracy"]) * 100`%. In addition, the kappa score of `r round(rf_confusion.mat$overall["Kappa"], 2)` also indicates more reliability for the random forest model as the kappa score evaluates the time something happened due to random chance, and higher kappa score means it's less likely because of a random chance. 
+
+```{r}
+plot(rf)
+
+```
+
+Above is a plot of the OOB errors produced by the model, the black line is the overall OOB error and the other three colored line represents each individual class. From this plot, we can tell that the OOB error for the model is very stable after 200th trees which suggest low variance of the model. 
+
+```{r}
+importance(rf) %>%
+    kable(
+    caption = 'Variable Importance Based on Gini Index',
+    booktabs = TRUE,
+    align = c('l', rep('c', 2))
+  ) %>%
+  kableExtra::kable_styling(
+    bootstrap_options = c('striped', 'condensed'),
+    font_size = 10,
+    latex_options = "HOLD_position"
+  ) 
+
+```
+
+Table 2 provides the variable importance in the random forest model using Gini Index.
+
+```{r}
+varImpPlot(rf)
+
+```
+
+Above is a plot that sort the variables using the Gini index, and the plot demonstrated that BMI category is of the highest importance among all other variables.
+
+## Conclusion
+
+This analysis discussed the different data visualizations using the "sleep" data set that contributed to existing findings and introduce new research questions, while compared the performance of KNN classification model and random forest model on classifying the sleep disorders based on the reminding variables. For example, the data visualizations in the EDA section describes a close connection between one's stress level and the sleep disorders, and a connection between the BMI category and the sleep disorder. In addition, the analysis also briefly talked about the unique aspects and details of using a KNN classification model and Random Forest model, and compare their performance using confusion matrix. From the results, it's clear that Random Forest model outperform KNN classification in many different ways. Included but not limited to, the overall accuracy, kappa score, and the time cost it takes to run both the algorithm. 
+
+## Code Appendix
+
+```{r}
+#| ref.label = knitr::all_labels(),
+#| echo = TRUE,
+#| eval = FALSE
+
+```
+
+
+
+
+
+
+
+
 
