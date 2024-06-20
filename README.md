@@ -28,3 +28,8 @@ Example questions:
 1) Which model performs better, KNN or random forest?
 2) What are the possible advantages of using KNN classification, or random forest?
 3) etc..
+
+## Web Scraping NBA Statistics using Python
+Objective - Build new useable web scraping pipline using Request and Beautifulsoup libraries in Python that generates csv files with data scrap off the NBA Statistics website.
+
+This project also comes with a machine learning notebook that performed regression analysis in predicting the SRS statistic for the team statistic. 
