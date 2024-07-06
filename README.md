@@ -32,4 +32,4 @@ Example questions:
 ## Web Scraping NBA Statistics using Python
 Objective - Build new useable web scraping pipline using Request and Beautifulsoup libraries in Python that generates csv files with data scrap off the NBA Statistics website.
 
-This project also comes with a machine learning notebook that performed regression analysis in predicting the SRS statistic for the team statistic and a simple Tableau Dashboar.
+This project also comes with a machine learning notebook that performed regression analysis in predicting the SRS statistic for the team statistic and a simple Tableau Dashboard.
