@@ -33,3 +33,6 @@ Example questions:
 Objective - Build new useable web scraping pipline using Request and Beautifulsoup libraries in Python that generates csv files with data scrap off the NBA Statistics website.
 
 This project also comes with a machine learning notebook that performed regression analysis in predicting the SRS statistic for the team statistic and a simple Tableau Dashboard.
+
+## Sales & Customer Dashboard
+Objective - Build a practice interactive dashboard that examines sales and order data. Credit to https://www.youtube.com/watch?v=dahrmqT5GD4
