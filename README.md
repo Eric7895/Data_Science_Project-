@@ -37,3 +37,10 @@ This project also comes with a machine learning notebook that performed regressi
 ## Sales & Customer Dashboard
 Objective - Build a practice interactive dashboard that examines sales and order data.  
 Credit to https://www.youtube.com/watch?v=dahrmqT5GD4
+
+## University Dashboard
+Objective - Build a practice interactive dashboard that examines American University data from 2013.
+
+Features included - 
+1) Illustrate the enrollment data using open street map.
+2) Data such as tuition, top universities, and geographic distribution change with the filter, allowing a view at the state or local level (by changing the university name).
